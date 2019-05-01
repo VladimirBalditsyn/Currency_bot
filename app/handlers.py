@@ -28,7 +28,7 @@ def handle_currency_message(message):
 def handle_help(message):
     bot.send_message(message.chat.id, '/reg - регистрация (если ты еще не '
                                       'с нами)\n/codes - узнать коды '
-                                      'валют\n/update_rates - обновить курс '
+                                      'валют\n/update_rate - обновить курс '
                                       '(если мне не доверяешь)\n'
                                       '\nТы можешь попросить меня:\nУзнать '
                                       'курс /rate\nКонвертировать в рубли '
