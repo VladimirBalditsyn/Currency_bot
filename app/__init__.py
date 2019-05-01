@@ -61,7 +61,7 @@ Transaction.create_table()
 
 def init_bot(token):
     global bot
-    telebot.apihelper.proxy = {'https': 'http://104.248.108.33:8080'}
+    # telebot.apihelper.proxy = {'https': 'http://104.248.108.33:8080'}
     bot = telebot.TeleBot(token)
 
     from app import handlers
