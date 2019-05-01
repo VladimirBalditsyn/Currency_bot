@@ -1,6 +1,7 @@
+# -*- coding: utf-8 -*-
 import telebot
-import datetime
-from peewee import *
+from peewee import IntegerField, FloatField, CharField, PostgresqlDatabase, \
+    MySQLDatabase, Model, DateField, PrimaryKeyField
 
 # db = PostgresqlDatabase(
 #     'currency_transactions',
@@ -60,7 +61,7 @@ Transaction.create_table()
 
 def init_bot(token):
     global bot
-    #telebot.apihelper.proxy = {'https': 'http://134.209.217.152:3128'}
+    telebot.apihelper.proxy = {'https': 'http://104.248.108.33:8080'}
     bot = telebot.TeleBot(token)
 
     from app import handlers
