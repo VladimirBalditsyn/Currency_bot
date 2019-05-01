@@ -1,10 +1,10 @@
-from app import *
+# -*- coding: utf-8 -*-
+from app import bot, People, Currency, Transaction
+import telebot
 import requests
-import math
 import datetime
 import xml.etree.ElementTree as ET
 import locale
-import re
 
 
 @bot.message_handler(commands=['start'])
@@ -33,8 +33,11 @@ def handle_help(message):
                                       '\nТы можешь попросить меня:\nУзнать '
                                       'курс /rate\nКонвертировать в рубли '
                                       '/to_rubles\nКонвертировать из рублей '
-                                      '/from_rubles\nИстория за период '
-                                      '/old_transactions')
+                                      '/from_rubles\nКонвертировать '
+                                      'из валюты в другую (не '
+                                      'рубли!) /to_currency\nИстория за '
+                                      'период /old_transactions\nОбновить '
+                                      'перевод /update_transaction')
 
 
 @bot.message_handler(commands=['codes'])
@@ -61,6 +64,18 @@ def handle_to_rubles(message):
     bot.register_next_step_handler(message, convert)
 
 
+@bot.message_handler(commands=['to_currency'])
+def handle_to_rubles(message):
+    bot.send_message(message.chat.id, "Какие валюты интересуют?\nВведи сумму и"
+                                      " через пробел код исходной валюты "
+                                      "валюты, затем код валюты, в которую "
+                                      "нужно перевести"
+                                      "\nПодсказка: "
+                                      "узнать коды валют  можно при помощи "
+                                      "команды /codes")
+    bot.register_next_step_handler(message, convert)
+
+
 @bot.message_handler(commands=['from_rubles'])
 def handle_from_rubles(message):
     bot.send_message(message.chat.id, "Какая валюта интересует?\nВведи код  "
@@ -80,7 +95,7 @@ def handle_rate(message):
 
 
 @bot.message_handler(commands=['old_transactions'])
-def handle_rate(message):
+def handle_transaction(message):
     bot.send_message(message.chat.id, "Какая период интересует?\nВведи "
                                       "диапазон дат в формате  \"YYYY-MM-DD "
                                       ": YYYY-MM-DD\"\nПримечание: период "
@@ -89,7 +104,17 @@ def handle_rate(message):
     bot.register_next_step_handler(message, get_old_transactions)
 
 
-# Handles all text messages that match the regular expression
+@bot.message_handler(commands=['update_transaction'])
+def handle_upd_transaction(message):
+    bot.send_message(message.chat.id, "Какой перевод интересует?\nВведи "
+                                      "номер интересующего "
+                                      "перевода\nПримечание: "
+                                      "номер "
+                                      "должен быть корректен, иначе ничего "
+                                      "не найду")
+    bot.register_next_step_handler(message, update_transaction)
+
+
 @bot.message_handler(content_types=['text'], regexp="python")
 def handle_python_message(message):
     bot.send_message(message.chat.id, "Я обожаю python!")
@@ -102,6 +127,17 @@ def handle_python_message(message):
                                       "узнать коды валют  можно при помощи "
                                       "команды /codes")
     bot.register_next_step_handler(message, convert)
+
+
+@bot.message_handler(content_types=['text'], regexp="Обновить перевод")
+def handle_python_message(message):
+    bot.send_message(message.chat.id, "Какой перевод интересует?\nВведи "
+                                      "номер интересующего "
+                                      "перевода\nПримечание: "
+                                      "номер "
+                                      "должен быть корректен, иначе ничего "
+                                      "не найду")
+    bot.register_next_step_handler(message, update_transaction)
 
 
 @bot.message_handler(content_types=['text'], regexp="История за период")
@@ -124,6 +160,19 @@ def handle_python_message(message):
     bot.register_next_step_handler(message, convert)
 
 
+@bot.message_handler(content_types=['text'], regexp='Конвертировать из '
+                                                    'валюты в другую')
+def handle_python_message(message):
+    bot.send_message(message.chat.id, "Какие валюты интересуют?\nВведи сумму и"
+                                      " через пробел код исходной валюты "
+                                      "валюты, затем код валюты, в которую "
+                                      "нужно перевести"
+                                      "\nПодсказка: "
+                                      "узнать коды валют  можно при помощи "
+                                      "команды /codes")
+    bot.register_next_step_handler(message, convert)
+
+
 @bot.message_handler(content_types=['text'], regexp="Узнать курс")
 def handle_python_message(message):
     bot.send_message(message.chat.id, "Какая валюта интересует?\nВведи код "
@@ -135,6 +184,48 @@ def handle_python_message(message):
 @bot.message_handler(content_types=['text'])
 def handle_text_message(message):
     bot.send_message(message.chat.id, 'Я тут вообще-то делом занят')
+
+
+def update_transaction(message):
+    update_rate()
+    number = 0
+    try:
+        number = int(message.text)  # проверяем, что номер введен корректно
+    except (TypeError, ValueError):
+        bot.send_message(message.chat.id, 'Цифрами, пожалуйста')
+        bot.register_next_step_handler(message, get_age)
+    old_transaction = Transaction.select().where(Transaction.pk == number)
+
+    if not old_transaction.exists() or old_transaction[0].id != \
+            message.chat.id:
+        bot.send_message(message.chat.id, 'Ничего нет')
+    else:
+        old_value = old_transaction[0].input_amount
+        cur_from = old_transaction[0].currency_from
+        cur_to = old_transaction[0].currency_to
+        rate_from = 1
+        if cur_from != 'RUB':
+            rate_from = Currency.select().where(Currency.cur_code ==
+                                                cur_from)[0].rate
+        rate_to = 1
+        if cur_to != 'RUB':
+            rate_to = Currency.select().where(Currency.cur_code == cur_to)[
+                0].rate
+        new_value = old_value * rate_from / rate_to
+        new_value = round(new_value, 4)
+        bot.send_message(message.chat.id, '{} {} сейчас {} {}'.format(
+            old_value, cur_from, new_value, cur_to))
+
+        result = Transaction.create(id=message.chat.id,
+                                    currency_from=cur_from,
+                                    currency_to=cur_to,
+                                    input_amount=old_value,
+                                    output_amount=new_value,
+                                    transaction_data=datetime.datetime.now(
+                                    ).date())
+        result.save()
+
+    bot.send_message(message.chat.id, 'Что ещё угодно?')
 
 
 def get_old_transactions(message):
@@ -173,7 +264,8 @@ def get_old_transactions(message):
         bot.send_message(message.chat.id, 'Ничего нет')
     else:
         for out in output:
-            output_print += '{} {} было {} {}\n'.format(out.input_amount,
+            output_print += '№{}) {} {} было {} {}\n'.format(out.pk,
+                                                      out.input_amount,
                                                       out.currency_from,
                                                       out.output_amount,
                                                       out.currency_to)
@@ -191,8 +283,9 @@ def convert(message):
 
     message_input = message.text.split(' ')
     value = 0.0
-    flag = True  #в рубли
-    if len(message_input) != 2:
+    flag_rub = True  # в рубли
+    flag_another = False
+    if len(message_input) < 2 or len(message_input) > 3:
         if message_input[0] == '/codes':
             handle_codes(message)
             bot.register_next_step_handler(message, convert)
@@ -211,7 +304,7 @@ def convert(message):
             buffer = message_input[1].split(',')
             value_txt = '.'.join(buffer)
             value = locale.atof(value_txt)
-            flag = False
+            flag_rub = False
             message_input = message_input[::-1]
         except (TypeError, ValueError):
             bot.send_message(message.chat.id, 'Ты промахнулся с '
@@ -223,8 +316,18 @@ def convert(message):
     if not cur_rate.exists():
         bot.send_message(message.chat.id, 'Не знаю такую валюту\nПопробуй ещё')
         bot.register_next_step_handler(message, convert)
+
+    cur_rate_to = 0.0  # курс валюты, в которую переводим (если не в рубли и
+    # не из них
+    if len(message_input) == 3:
+        cur_rate_to = Currency.select().where(Currency.cur_code ==
+                                              message_input[2].upper())
+        flag_another = True
+    if not cur_rate_to.exists():
+        bot.send_message(message.chat.id, 'Не знаю такую валюту\nПопробуй ещё')
+        bot.register_next_step_handler(message, convert)
     else:
-        if flag:
+        if flag_rub and not flag_another:
             result_value = value * cur_rate[0].rate
             result_value = round(result_value, 4)
             bot.send_message(message.chat.id, '{} RUB'.format(result_value))
@@ -235,7 +338,7 @@ def convert(message):
                                         transaction_data=datetime.datetime.now(
                                             ).date())
             result.save()
-        else:
+        elif not flag_rub and not flag_another:
             result_value = value / cur_rate[0].rate
             result_value = round(result_value, 4)
             bot.send_message(message.chat.id, '{} {}'.format(result_value,
@@ -247,6 +350,22 @@ def convert(message):
                                         output_amount=result_value,
                                         transaction_data=datetime.datetime.now(
                                         ).date())
+            result.save()
+        else:
+            result_value = value / cur_rate_to[0].rate * cur_rate[0].rate
+            result_value = round(result_value, 4)
+            bot.send_message(message.chat.id, '{} {}'.format(result_value,
+                                                             cur_rate_to[
+                                                                 0].cur_code))
+            result = Transaction.create(id=message.chat.id,
+                                        currency_from=cur_rate[0].cur_code,
+                                        currency_to=cur_rate_to[0].cur_code,
+                                        input_amount=value,
+                                        output_amount=result_value,
+                                        transaction_data=datetime.datetime.now(
+                                        ).date())
+            result.save()
+
         bot.send_message(message.chat.id, 'Что ещё угодно?')
 
 
